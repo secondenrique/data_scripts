@@ -1,0 +1,182 @@
+---
+title: "Centrality in Exile"
+author: "Andrew Roth, Enrique Nusi, Jamal Malik"
+date: "12/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(igraph)
+
+```
+
+## Summary
+
+The 2020 Belarusian presidential election was held on August 9th, 2020. Having won every presidential election in Belarus since 1994, incumbent Alexander Lukashenko was reelected to his sixth term in office. The international community has repeatedly called the integrity of these elections into question, but the 2020 results drew unprecedented attention. 
+
+Opposition candidate Sviatlana Tsikhanouskaya claimed victory and called on Lukashenko to start negotiations. Her campaign subsequently formed the Coordination Council for the Transfer of Power (also known as the Coordination Council) to facilitate a transfer of power. Conspicuously, all members of the Coordination Council's presidium were subsequently arrested or went into exile. 
+
+This project consisted of a photographic analysis of relationship ties and their implications in Belarusian political opposition coordination. By analyzing the opposition network, it was possible to identify key players in terms of their relative importance to the network. As expected, Sviatlana Tsikhanouskaya was a central figure to the opposition network. Political activist and Coordination Council presidium member Maria Kalesnikava was also identified as a highly influential figure. 
+
+## Methodology
+
+To conduct the photographic analysis, a rudimentary internet search was conducted to locate photographs of opposition figures. A relationship tie was identified when these members appeared in photographs together, and the strength of these ties was weighted based on how many times individuals appeared in photographs together. This approach is useful as part of a suite of analytical tools, but it is important to note that as a standalone approach, there are limitations to the extent of the information that can be derived through this kind of analysis. 
+
+## Analysis
+
+Import and format the data.
+
+```{r Data}
+
+data <- read.csv("finprac.csv")
+
+data <- as.matrix(data) # formats data properly
+
+g <- graph_from_adjacency_matrix(data, 
+                                 mode="undirected", # determining direction was not possible w/ our methodology 
+                                 weighted=TRUE) # converts whole numbers in our .csv to thicker/thinner lines in igraph
+
+```
+
+Assign colors based on the strength of relationships to be displayed in the graph. If two individuals appeared in photographs together 6 times or less, the relationship was considered weak and is denoted by a green line. If two individuals appeared in photographs together anywhere from 7 to 10 times, the relationship strength was considered to be medium and is denoted by a yellow line. If two individuals appeared in photographs together 11 or more times, the relationship was considered strong and is denoted by a red line.
+
+
+```{r Color Scale}
+
+# YOU MUST RUN THESE IN THIS ORDER FOR IT TO SUBSET CORRECTLY
+E(g)$color[E(g)$weight>=7] <- 'gold' # medium
+E(g)$color[E(g)$weight<=6] <-  'forestgreen' # weak
+E(g)$color[E(g)$weight>=11] <- 'firebrick1' # strong
+
+```
+
+Plot the network.
+
+```{r Plot}
+
+# basic format for displaying what we need it to display
+set.seed(106)
+plot.igraph(g, #  our data
+            edge.width=2,
+            edge.color=E(g)$color, 
+            vertex.label=V(g)$name, # displays names instead of column number
+            vertex.size=0,
+            vertex.label.color="black",
+            vertex.label.size=1.5,
+            layout=layout.davidson.harel)
+
+
+```
+
+# Descriptive Statistics
+
+Calculate descriptive statistics for the network.
+
+```{r Descriptive Stats}
+
+Dia_g <- diameter(g) #Diameter
+Edn_g <- edge_density(g) #Edge density
+Eig_g <- eigen_centrality(g, weights = E(g)$weight)$vector #Eigenvector centrality
+Btw_g <- betweenness(g, weights = E(g)$weight) #Betweenness centrality
+Rch_g <- (ego_size(g, 1)-1)/(vcount(g)-1) #Reach
+
+```
+
+Interpret descriptive stats for the network.
+
+```{r Diameter and Edge Density}
+
+Edn_g #Edge density
+Dia_g #Diameter
+
+```
+
+The density of this network is 0.39, which indicates a moderately dense network. The diameter of the network is 13, which is more useful in comparisons with other networks than as a standalone metric.
+
+
+```{r Centrality}
+
+Btw_g #Betweenness centrality
+Eig_g #Eigenvector centrality
+
+```
+
+The centrality scores reveal a lot of crucial information about the network. Sviatlana Tsikhanouskaya, as suspected, had the highest betweenness centrality score. Her score of 61 was more than triple the second highest score (Coordination Council spokesman Anton Radniankou with 19), indicating that she is a central actor in this network. Given Tsikhanouskaya's position as the de facto leader of the Coordination Council, this was not unexpected.
+
+Eigenvector centrality can be viewed as a measure of the relative "importance" of a node in a network. Even if an individual does not have a high quantity of connections, if they have several connections with individuals who themselves are highly connected, this indicates that the individual could play an important role within the network. Despite Sviatlana Tsikhanouskaya's central role in the network, Maria Kalesnikava had the highest eigenvector centrality score. Coordination Council presidium members Maksim Znak (eigenvector score = 0.81) and Pavel Latushka (eigenvector score 0.71) were also notable actors in the network.
+
+```{r Reach}
+
+Rch_g
+get.vertex.attribute(g)
+
+```
+
+Reach is a measure of the connectedness of a given node, which can indicate the extent of an individual's influence. As expected, Sviatlana Tsikhanouskaya had the highest reach score at 0.80.
+
+# Cliques
+
+Identifying cliques within the network reveals information as far as collaboration, communication, and flow of information within the network.
+
+
+```{r Cliques}
+
+g2 <- g %>%
+  igraph::delete_edges(edges = which(igraph::E(.)$weight < 7)) %>%
+  igraph::cliques(min = 3)
+g2
+
+```
+
+Three cliques were identified: 1) Maria Kalesnikava, Sviatlana Tsikhanouskaya, and Veranika Tsapkala; 2) Maria Kalesnikava, Anton Radniankou, and Ivan Kravtsov; and 3) Maksim Znak, Pavel Latushka, and Maria Kalesnikava.
+
+# Clusters
+
+Similar to cliques, identifying clusters can reveal information regarding communication and flow of information within the network. Two algorithms to identify clusters were run: spinglass and edge betweenness.
+
+```{r Clusters}
+
+sg <- cluster_spinglass(g, spins=5) #Spinglass 
+cg <- cluster_edge_betweenness(g) #Edge Betweenness
+
+```
+
+
+```{r Spinglass}
+
+set.seed(100)
+plot(sg, g,
+     vertex.label = V(g)$name,
+     weights=E(g)$weight,
+     layout=layout.davidson.harel, 
+     vertex.label.dist=2,
+     vertex.label.color="black",
+     vertex.label.cex=1.3,
+     main="Max Modularity Solution")
+
+```
+
+Three unique clusters were identified using the spinglass algorithm.
+
+```{r Edge Betweenness}
+
+set.seed(102)
+plot(cg, g,
+     vertex.label = V(g)$name,
+     weights=E(g)$weight,
+     layout=layout.davidson.harel, 
+     vertex.label.dist=2,
+     vertex.label.color="black",
+     vertex.label.cex=1.3,
+     main="Max Modularity Solution")
+
+```
+
+Three major clusters were identified using the edge betweenness algorithm, as well as one individual located outside of the three major clusters. 
+
+## Conclusion
+
+While photographic analysis of relationship ties was effective at revealing compelling information about the network, this method of data collection carries the potential for gaps in the data that should be filled to create a more complete picture and reveal all possible information about the network. When employed as part of a suite of analytical tools, the utility of this analytic method is enhanced substantially. In this project, analysis of the Belarusian presidential election opposition movement network was able to identify key actors, cliques, and subgroups within that network, which will serve as a useful starting point in ongoing research. 

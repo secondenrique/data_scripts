@@ -1,0 +1,69 @@
+---
+title: "Custom Twitter Data Sets"
+author: "Enrique Nusi"
+date: "3/23/2021"
+output: html_document
+---
+## No need to mess with this part, it's an unrelated option for Markdown functions specifically and will run on its own
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## STEP 1: Load libraries and enter a name for your Excel .csv file
+
+```{r, echo=FALSE}
+
+library(tidyverse)  #General data cleaning, enables %>% operator
+library(rtweet)     #Twitter API functions
+
+SPREADSHEET="tweets_bidenplan.csv" #Enter a name for your Excel file here
+
+```
+
+
+## STEP 2: Choose hashtags/terms for your Twitter search, the number to scrape for each, whether to include re-tweets, whether to scrape by most recent or by most popular, and language
+
+# NOTE: Running this chunk will open a browser window and direct you to log into a Twitter account to authenticate - this does not have to be your personal one.
+
+```{r, echo=FALSE}
+
+dat <- as.data.frame(search_tweets(q="#buildbackbetter",  #Enter search terms or hashtags here
+                                    n=500,                #Max number of Tweets to collect for this search term
+                                    include_rts=FALSE,    #Include re-tweets (TRUE will include them, FALSE will exclude)
+                                    type="recent",        #Can collect "recent" Tweets, "popular" Tweets, or "mixed" between the two
+                                    lang="en")) %>%       #Language to be collected
+  
+                 rbind(search_tweets(q="3 trillion",
+                                     n=500,
+                                     include_rts=FALSE,
+                                     type="recent",
+                                     lang="en")) %>%
+  
+                 rbind(search_tweets(q="congress",
+                                     n=500,
+                                     include_rts=FALSE,
+                                     type="popular",
+                                     lang="en"))
+
+```
+
+
+## STEP 3: Enter variables you wish to keep and flatten the data set to write to a .csv
+
+```{r, echo=FALSE}
+
+dat1 <- dat %>% 
+  select(screen_name, text, created_at, hashtags, urls_url, followers_count) %>% #Choose variables to include in your data set
+  flatten() #Makes file writeable using write_csv() - basically, makes sure that emojis show up and that there are minimal formatting issues
+
+write_csv(dat1, SPREADSHEET) #Creates an Excel .csv file
+
+```
+
+# FOR GOOGLE SHEETS: The best/easiest way to display your custom data set properly is to create a Google Sheets document and select File > Import > Upload and drag your newly created .csv into the box.  You can open the Excel file directly also, but Windows may not display emojis correctly.  
+
+# FOR EXCEL: If you need to work offline and would prefer a local file, Windows users should create a new Excel file, select Blank Workbook, and then navigate to Data > Get Data > From File > From Text/CSV and then select the .csv you generated; from the File Origin dropdown menu, select the option "65001: Unicode (UTF-8)" and click Load.  It should display black-and-white versions of the collected emojis.  For full-color emojis, the Google Sheets method may be preferable. 
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
