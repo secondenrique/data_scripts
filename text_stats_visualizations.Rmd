@@ -155,10 +155,10 @@ wordcloud(words=imported_data2$word, #Generates word cloud for textWords
 
 library(scales)
 
-TERM = "DESIRED_WORD"   #Put word from term freq chart here, no spaces
+TERMIN = "DESIRED_WORD"   #Put word from term freq chart here, no spaces
 
 chart <- imported_data %>% 
-  filter(TERM == TERM) %>% 
+  filter(TERMIN == TERMIN) %>% 
   mutate(day = lubridate::floor_date(PublishDate, unit = "day")) %>% #Can set floor date to "week", "month", "hour", "year" etc
   count(day) 
 
@@ -167,7 +167,7 @@ chart_sd <- sd(chart$n)
 chart_avg <- mean(chart$n)
 display_sd <- paste("Standard Deviation (red line is x2) =", as.character(round(chart_sd, digits=3)))
 display_avg <- paste("Average (black line) =", as.character(round(chart_avg, digits=3)))
-display_title <- paste("Term Usage Tracker:", TERM)
+display_title <- paste("Term Usage Tracker:", TERMIN)
 
 chart$test <- sd(chart$n)
 
