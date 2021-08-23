@@ -30,10 +30,10 @@ imported_data <- read_csv("dataset_FILTERED.csv") #Use data filtered through a c
 library(googlesheets4)
 library(data.table)
 
-glossProc <- function(URL){ #Glossary reading function
-  glossaryWords <- read_sheet(URL, col_types = "c") %>% 
-    mutate(word = tolower(Concept)) %>%
-    mutate(others = tolower(`Associated Terms`)) %>% 
+customWordList <- function(URL){ #function to get and tidy a custom word list
+  Cust_Words <- read_sheet(URL, col_types = "c") %>% 
+    mutate(word = tolower(TERMS)) %>%
+    mutate(others = tolower(ASSC_TERMS)) %>% 
     select(word, others) %>% 
     mutate(word = str_replace_all(word, "\\(", "\\\\(")) %>% 
     mutate(word = str_replace_all(word, "\\)", "\\\\)")) %>% 
@@ -42,7 +42,7 @@ glossProc <- function(URL){ #Glossary reading function
     mutate(others = str_replace_all(others, "\\)", "\\\\)")) %>% 
     filter(!word %in% c("terms", "from", "custom list", "to", "exclude"))
   
-  filter_words <- c(glossaryWords$word, glossaryWords$others)
+  filter_words <- c(Cust_Words$word, Cust_Words$others)
   filter_words <- filter_words[!is.na(filter_words)]
   
   filter_list <- c()
@@ -51,50 +51,50 @@ glossProc <- function(URL){ #Glossary reading function
     i <- str_split(i, ", ")
     filter_list <- c(filter_list, unlist(i))
   }
-  glossaryWords <- paste("\\b", unlist(filter_list), "\\b", sep = "")
-  glossaryWords <- glossaryWords[!is.na(glossaryWords)]
-  return(tolower(paste(glossaryWords, collapse="|")))
+  Cust_Words <- paste("\\b", unlist(filter_list), "\\b", sep = "")
+  Cust_Words <- Cust_Words[!is.na(Cust_Words)]
+  return(tolower(paste(Cust_Words, collapse="|")))
 }
 
-glossWords <- glossProc("URL_TO_CUSTOM_WORDLIST(OR_ADD_A_LIST_DIRECTLY")
+Cust_Word_List <- customWordList("URL_TO_CUSTOM_WORDLIST(OR_ADD_A_LIST_DIRECTLY")
 gargle::gargle_oauth_cache()
 
 ```
 
 
-##STEP 2: Tidy data and glossary words and generate term frequency chart (save as termfreq_dataset.png, at least 1200 for width)
+##STEP 2: Tidy data and custom words and generate term frequency chart (save as termfreq_dataset.png, at least 1200 for width)
 
 ```{r term freq, echo=FALSE}
 
 stage1_text <- imported_data %>% #Puts data into a tidy format, removes extra spacing characters
-  mutate(match_term = trimws(match_term)) %>% 
-  select(UserName, PublishDate, match_term) %>% 
-  mutate(match_term = str_replace_all(match_term, "c\\(", "")) %>% 
-  mutate(match_term = str_replace_all(match_term, "\\)", "")) %>% 
-  mutate(match_term = str_replace_all(match_term, "\\\\", "")) %>% 
-  mutate(match_term = str_replace_all(match_term, "\"", "")) %>% 
-  mutate(match_term = str_split(match_term, ",")) %>%
-  unnest(match_term) %>% 
-  mutate(match_term = case_when(match_term == "character(0)" ~ "",
-                                match_term != "character(0)" ~ match_term)) %>%
-  filter(!is.na(match_term))
+  mutate(TERM = trimws(TERM)) %>% 
+  select(UserName, PublishDate, TERM) %>% 
+  mutate(TERM = str_replace_all(TERM, "c\\(", "")) %>% 
+  mutate(TERM = str_replace_all(TERM, "\\)", "")) %>% 
+  mutate(TERM = str_replace_all(TERM, "\\\\", "")) %>% 
+  mutate(TERM = str_replace_all(TERM, "\"", "")) %>% 
+  mutate(TERM = str_split(TERM, ",")) %>%
+  unnest(TERM) %>% 
+  mutate(TERM = case_when(TERM == "character(0)" ~ "",
+                                TERM != "character(0)" ~ TERM)) %>%
+  filter(!is.na(TERM))
 
-stage1_time <- stage1_text %>% #Counts match term occurrences 
-  mutate(match_term = trimws(match_term)) %>%
-  group_by(match_term) %>% 
+stage1_time <- stage1_text %>% #Counts matched word occurrences 
+  mutate(TERM = trimws(TERM)) %>%
+  group_by(TERM) %>% 
   summarize(N = n()) %>% 
   mutate(freq = N) %>%
   ungroup() %>% 
   arrange(desc(freq)) %>% 
-  filter(match_term != "character(0")
+  filter(TERM != "character(0")
 
 stage1_time %>% #Generates term freq chart
-  filter(!is.na(match_term)) %>% 
-  filter(!match_term %in% c("list", "of", "words from custom glossary", "to", "exclude")) %>%
-  mutate(match_word = factor(match_term, match_term)) %>%
+  filter(!is.na(TERM)) %>% 
+  filter(!TERM %in% c("list", "of", "words from custom word list", "to", "exclude")) %>%
+  mutate(match_word = factor(TERM, TERM)) %>%
   arrange(desc(freq)) %>% 
   head(20) %>%
-  hchart("column", hcaes(x = reorder(match_term, freq), y = freq)) %>% 
+  hchart("column", hcaes(x = reorder(TERM, freq), y = freq)) %>% 
   hc_title(text = paste("Frequency of Custom Terms Used")) %>% 
   hc_yAxis(title =list(text="Number of Occurrences of Custom Terms")) %>% 
   hc_xAxis(title = list(text="Custom Term")) %>% 
@@ -103,7 +103,7 @@ stage1_time %>% #Generates term freq chart
 ```
 
 
-##STEP 3: Generate word clouds for match_term and textWords variables (must be run separately, save as wc_match_term.png and wc_textWords.png no need to resize these)
+##STEP 3: Generate word clouds for TERM and textWords variables (must be run separately, save as wc_TERM.png and wc_textWords.png no need to resize these)
 
 ```{r wordcloud, echo=FALSE}
 
@@ -114,18 +114,18 @@ library(dplyr)
 plt <- brewer.pal(8, "Set2") #settings for color palette
 
 
-imported_data <- imported_data %>%  transform(match_term = strsplit(match_term, ",")) %>% #If a row has more than one term, splits concatenated terms into their own rows
-  unnest(cols=c(match_term)) %>% 
-  filter(match_term != "character(0)") %>% 
-  mutate(match_term = str_replace_all(match_term, "\"", "")) %>% 
-  mutate(match_term = str_replace_all(match_term, "\\)", "")) %>% 
-  mutate(match_term = str_replace_all(match_term, "c\\(", "")) %>% 
-  mutate(match_term = str_replace_all(match_term, " (?=.*)", "")) %>%
-  filter(!match_term %in% c("list", "of", "words from custom glossary", "to", "exclude"))
-imported_data1 <- count(imported_data, match_term)
+imported_data <- imported_data %>%  transform(TERM = strsplit(TERM, ",")) %>% #If a row has more than one term, splits concatenated terms into their own rows
+  unnest(cols=c(TERM)) %>% 
+  filter(TERM != "character(0)") %>% 
+  mutate(TERM = str_replace_all(TERM, "\"", "")) %>% 
+  mutate(TERM = str_replace_all(TERM, "\\)", "")) %>% 
+  mutate(TERM = str_replace_all(TERM, "c\\(", "")) %>% 
+  mutate(TERM = str_replace_all(TERM, " (?=.*)", "")) %>%
+  filter(!TERM %in% c("list", "of", "words from custom word list", "to", "exclude"))
+imported_data1 <- count(imported_data, TERM)
 
 set.seed(100)
-wordcloud(words=imported_data1$match_term, #Generates word cloud for match_terms
+wordcloud(words=imported_data1$TERM, #Generates word cloud for TERM
           freq=imported_data1$n,
           scale=c(3,0.5), #Largest font size to smallest
           min.freq = 5, #Only displays words that appear X number of times
@@ -155,10 +155,10 @@ wordcloud(words=imported_data2$word, #Generates word cloud for textWords
 
 library(scales)
 
-TERM = "glossword"   #Put word from term freq chart here, no spaces
+TERM = "DESIRED_WORD"   #Put word from term freq chart here, no spaces
 
 chart <- imported_data %>% 
-  filter(match_term == TERM) %>% 
+  filter(TERM == TERM) %>% 
   mutate(day = lubridate::floor_date(PublishDate, unit = "day")) %>% #Can set floor date to "week", "month", "hour", "year" etc
   count(day) 
 
