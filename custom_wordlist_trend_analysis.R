@@ -10,8 +10,8 @@ dat$publishDate <- as.Date(dat$publishDate)
 dat <- as_tibble(dat)
 
 # Add new categories from glossary terms here
-antisemitic <- c("6 gorillion", "aryan nations", "anudda shoah", "chosenite", "electric jew", "goy", "hand rubbing", "hh", "honk honk", "Israel", "isreal", "izreal", "James Mason", "joos", "protocols of the elders of zion", "red sea pedestrian", "serpent seed", "shoah survivor", "siege", "sionist", "TPTB", "white israel", "zog", "j3w$", "ovens", "hitler guilt", "kvetching", "jewish attack vector", "jevv", "shlomo", "ziocon", "izrail", "jewtube", "jewish question", "zionazi", "the goyim know", "goyfeed", "hasbarist", "holohoax", "israhell", "jew-s government", "jewsa", "kike", "pissrael", "synagogue of satan", "cohencidence", "dancing israelis", "der ewige jude", "edomite", "gtk rwn", "gtkrwn",  "jewsmedia", "jews media", "khazar", "kosher nostra", "mamzer", "marrakech migration pact", "miga", "noahide law", "rahowa", "shiksa", "simon of trent", "small hat", "star of remphan", "tartarian empire", "you will not replace us")
-as_virulent <- c("synagogue of satan", "zionazi", "shlomo")
+antisemitic <- c("Israel", "isreal", "izreal", "joos", "sionist", "zog", "j3w$", "jevv", "shlomo", "israhell", "kike", "pissrael")
+as_virulent <- c("zionazi", "shlomo")
 
 
 # Filter for specific rhetoric using relevant gloss terms--when adding a new target of concern per client's protected group designation, grey out unneeded lists and update as needed.
