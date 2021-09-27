@@ -1,0 +1,193 @@
+---
+title: "Topic Modeling Script"
+author: "Enrique Nusi"
+date: "5/4/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## STEP 1: Load libraries and textOriginal data from final sampled data, add additional missing stopwords as needed; name your output files for the 1- 2- and 3-word lists, topic names, and LDAvis files.
+
+```{r cars}
+
+library(tidyverse)
+library(stopwords)
+library(tm)
+library(topicmodels)
+library(ldatuning)
+library(parallel)
+library(LDAvis)
+library(stringi)
+library(quanteda)
+library(quanteda.textstats)
+library(seededlda)
+library(slam)
+library(servr)
+library(tidyjson)
+
+DATA_PRIM = "dataset_name" #Name of your data set file, without the .csv
+
+CSV_FILE <- paste(DATA_PRIM, sep="", ".csv")
+ONEWRD <- paste(DATA_PRIM, sep="", "_1word.csv")
+TWOWRD <- paste(DATA_PRIM, sep="", "_2word.csv")
+THRWRD <- paste(DATA_PRIM, sep="", "_3word.csv")
+TPCLST <- paste(DATA_PRIM, sep="", "_topics.csv")
+TPCMOD <- paste(DATA_PRIM, sep="", "_lda.csv")
+
+data <- read_csv(CSV_FILE) #read in your data from .csv
+data <- as.matrix(data$DOC_TEXT) #convert just the DOC_TEXT column to a matrix array for conversion into a Corpus/corpus object
+
+missingStopWords <- c("the", "just", "like", "can", "got", "us", "also", "oh", "even", "say", "said", "based", "yeah", "yet", "go", "get") #just add/remove them as needed
+
+```
+
+
+## STEP 2: Pre-process raw data for conversion to corpus/Corpus format then generate quanteda and tm corpus objects.
+
+```{r, echo=FALSE}
+
+data <- tolower(data)  #force to lowercase
+data[stri_count(data, regex="\\S+") < 8] = ""
+data <- gsub("'", "", data)  #remove apostrophes
+data <-
+  gsub("[[:punct:]]", " ", data)  #replace punctuation with space
+data <-
+  gsub("[[:cntrl:]]", " ", data)  #replace control characters with space
+data <-
+  gsub("[[:digit:]]", "", data)  #remove digits
+data <-
+  gsub("^[[:space:]]+", "", data) #remove whitespace at beginning of documents
+data <-
+  gsub("[[:space:]]+$", "", data) #remove whitespace at end of documents
+data <- stripWhitespace(data)
+
+corp <- corpus(data) #quanteda-compatible corpus object (lower-case c) for general analysis
+exploratory_corp <- Corpus(VectorSource(data)) #tm-compatible Corpus object (upper-case C) for topic number discovery
+
+```
+
+
+## STEP 3: Tokenize and tidy quanteda corpus object, generate colocations for accuracy, and generate quanteda and tm objects for conversion into dfm/dtm objects.
+
+```{r, echo=FALSE}
+
+quantok <- corp %>% #tidy your corpus object for conversion to document-feature matrix and document term matrix
+  tokens() %>%
+  tokens_tolower() %>%
+  tokens_remove(pattern=c(stopwords::stopwords(), missingStopWords), padding=TRUE) #removes stop words based on the stopwords package and the user-defined missingStopWords list
+
+corpcolo <- textstat_collocations(quantok, size=2, min_count=18) #try to aim for between 150 and 250 terms (terms, NOT min_count) in this list
+
+quantok <- tokens_compound(quantok, corpcolo) #final corpus for conversion into dfm/dtm (quanteda function)
+tmtok <- Corpus(VectorSource(quantok)) #convert quanteda tokens with colocations to tm Corpus
+
+```
+
+
+## STEP 4: Generate quanteda-compatible DFM object and process it for use with the LDA function.
+
+```{r, echo=FALSE}
+
+dfm1 <- quantok %>% 
+  tokens_remove("") %>% #removes empty space
+  dfm() %>% #converts quanteda corpus to document-feature matrix
+  dfm_trim(min_docfreq=35, min_termfreq=20, verbose=TRUE) #min_docfreq should be about 1% of the total number of comments, min_termfreq should be around the same or slightly greater than the corpcolo min_count.
+
+raw.sum <- apply(dfm1,1,FUN=sum) #raw sums to count up zeroes
+dfm1 <- dfm1[raw.sum!=0,] #remove rows with zeroes to make the dfm compatible with the LDA() function
+
+print(sparsity(dfm1)) #a sparsity between 0.96 and 0.98 seems to be our sweet spot
+
+```
+
+
+## STEP 5: Generate dtm object and topics number plot and interpret graph to determine the number (K) of topics to examine--somewhere between the max of Griffiths and the min of Arun (add the numbers together and divide by 2 to get a rough estimate of your final K value).  Adjust top=seq() numbers to zoom in/out as needed.
+
+```{r, echo=FALSE}
+
+dtm1 <- convert(dfm1, to="topicmodels")
+
+poss_k <- FindTopicsNumber(dtm1, #OBJECT MUST BE DTM COMPATIBLE WITH TM PACKAGE--CANNOT BE QUANTEDA-GENERATED DFM
+                           topics=seq(1,101, by=10), #lower-limit to upper-limit of possible topics for analysis in increments of by=x; if encountering an error, try lowering the upper-limit or increasing the by=x
+                           metrics=c( "Griffiths2004", "Arun2010"), #generates 4 line plots from which you will determine your K value
+                           mc.cores=7) #number of processor cores to be used--if using a multi-core processor, figure out the number of cores you have and subtract one then enter that number
+
+FindTopicsNumber_plot(poss_k) #generate a plot visualization of the above object
+
+```
+
+
+## STEP 6: Enter your K number and run to generate an LDA model, then generate posterior data for suplementary analysis as needed.
+
+```{r, echo=FALSE}
+
+K <- 6 #the number of topics to model
+
+set.seed(1234)
+lda1 <- LDA(dfm1, K, method="Gibbs") #creates an LDA model based on the dfm1 object in STEP 2 with K-number of topics analyzed
+
+post_results <- posterior(lda1) #posterior object for later analysis tbd
+post_terms <- posterior(lda1)$terms #numerical values for terms/documents frequency
+post_topics <- posterior(lda1)$topics
+
+```
+
+
+## STEP 7: Generate a list of 1-, 2-, and 3-word colocations for glossary research and create a .csv; these can go in the raw data folder for the appropriate report cycle.
+
+```{r, echo=FALSE}
+
+print_1_word_colo <- textstat_frequency(dfm1, n=100)
+print_3_word_colo <- textstat_collocations(quantok, size=3, min_count=3) #creates a list of terms by calculating when 3 colocated words appear at least as many times as indicated in min_count=x
+
+
+write_csv(print_1_word_colo, file=ONEWRD)
+write_csv(corpcolo, file=TWOWRD)
+write_csv(print_3_word_colo, file=THRWRD)
+
+```
+
+
+## STEP 8: Generate and tidy a topic terms list, then create a .csv; this can go in the raw data folder for the appropriate report cycle.
+
+```{r, echo=FALSE}
+
+topic_terms <- as.matrix(topicmodels::terms(lda1, 20)) #Generates a topic model with K number of topics displaying the top 20 words in those topics.
+topic_names <- apply(topic_terms, 2, paste, collapse=" ") #Generates a potential list of names for each topic based on the top 2 most prevalent words in the model--will not be attached to the final topic model .csv, but you can generate your own .csv if you feel it's important enough
+
+topic_model <- as.data.frame(topic_terms)
+write_csv(topic_model, file=TPCLST)
+#write_csv(convert(dfm1, to="data.frame"), file="dfm_08_25_21.csv")
+
+```
+
+
+## STEP 9: Generate LDAvis object for integration into Shiny
+
+```{r, echo=FALSE}
+
+topicmodels2LDAvis <- function(x, ...){
+    post <- topicmodels::posterior(x)
+    if (ncol(post[["topics"]]) < 3) stop("The model must contain > 2 topics")
+    mat <- x@wordassignments
+    LDAvis::createJSON(
+        phi = post[["terms"]], 
+        theta = post[["topics"]],
+        vocab = colnames(post[["terms"]]),
+        doc.length = slam::row_sums(mat, na.rm = TRUE),
+        term.frequency = slam::col_sums(mat, na.rm = TRUE)
+    )
+}
+
+json <- topicmodels2LDAvis(lda1)
+serVis(json = json, out.dir = TPCMOD)
+
+#library(servr)
+#servr::httd(TPCMOD)
+ 
+```
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
