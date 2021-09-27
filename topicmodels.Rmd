@@ -36,7 +36,7 @@ ONEWRD <- paste(DATA_PRIM, sep="", "_1word.csv")
 TWOWRD <- paste(DATA_PRIM, sep="", "_2word.csv")
 THRWRD <- paste(DATA_PRIM, sep="", "_3word.csv")
 TPCLST <- paste(DATA_PRIM, sep="", "_topics.csv")
-TPCMOD <- paste(DATA_PRIM, sep="", "_lda.csv")
+TPCMOD <- paste(DATA_PRIM, sep="", "_lda")
 
 data <- read_csv(CSV_FILE) #read in your data from .csv
 data <- as.matrix(data$DOC_TEXT) #convert just the DOC_TEXT column to a matrix array for conversion into a Corpus/corpus object
