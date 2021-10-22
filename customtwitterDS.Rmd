@@ -15,9 +15,14 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r, echo=FALSE}
 
 library(tidyverse)  #General data cleaning, enables %>% operator
+library(data.table) #Specialized functions for reading in data
+library(re2r)       #Multi-core enabled functions, makes filtering go faster
+library(quanteda)   #Data analysis package
 library(rtweet)     #Twitter API functions
 
-SPREADSHEET="tweets_bidenplan.csv" #Enter a name for your Excel file here
+DATPRIM=      "tweets_incels" #Enter a title for your data set
+SPREADSHEET=  paste(DATPRIM, sep="", ".csv")
+FINFILT=      paste(DATPRIM, sep="", "_FILTERED.csv")
 
 ```
 
@@ -28,36 +33,65 @@ SPREADSHEET="tweets_bidenplan.csv" #Enter a name for your Excel file here
 
 ```{r, echo=FALSE}
 
-dat <- as.data.frame(search_tweets(q="#buildbackbetter",  #Enter search terms or hashtags here
-                                    n=500,                #Max number of Tweets to collect for this search term
+dat <- as.data.frame(search_tweets(q="incel",             #Enter query terms or hashtags here
+                                    n=5000,               #Max number of Tweets to collect for this search term
                                     include_rts=FALSE,    #Include re-tweets (TRUE will include them, FALSE will exclude)
                                     type="recent",        #Can collect "recent" Tweets, "popular" Tweets, or "mixed" between the two
-                                    lang="en")) %>%       #Language to be collected
+                                    lang="en")) %>%       #Target language of collection
   
-                 rbind(search_tweets(q="3 trillion",
-                                     n=500,
+                 rbind(search_tweets(q="weeb",
+                                     n=5000,
                                      include_rts=FALSE,
                                      type="recent",
                                      lang="en")) %>%
   
-                 rbind(search_tweets(q="congress",
-                                     n=500,
+                 rbind(search_tweets(q="parasocial",
+                                     n=5000,
                                      include_rts=FALSE,
-                                     type="popular",
+                                     type="recent",
+                                     lang="en")) %>%
+                
+                 rbind(search_tweets(q="#sigma",
+                                     n=5000,
+                                     include_rts=FALSE,
+                                     type="recent",
+                                     lang="en")) %>%
+
+                 rbind(search_tweets(q="#powerfuljre",
+                                     n=5000,
+                                     include_rts=FALSE,
+                                     type="recent",
                                      lang="en"))
+
+write_csv(dat, SPREADSHEET)
 
 ```
 
 
-## STEP 3: Enter variables you wish to keep and flatten the data set to write to a .csv
+## STEP 3: Filter your results through a custom word list that suits your analytical needs
 
 ```{r, echo=FALSE}
 
-dat1 <- dat %>% 
-  select(screen_name, text, created_at, hashtags, urls_url, followers_count) %>% #Choose variables to include in your data set
+customWords <- as.vector(c("stacy", "incel", "volcel", "saint elliot", "waifu", "chad", "alpha", "sigma", "beta", "maga", "great replacement", "nwo", "cuck"))
+
+dat1 <- fread(SPREADSHEET, encoding = "UTF-8")  #DF for filtered comments--UTF-8 encoding preserves emojis & special characters
+FILTER_DATE <- Sys.Date() - 30                 #Filter out results older than ## days--adjust as needed
+dat1 <- dat1[created_at >= FILTER_DATE]        #Omits all comment data made before the specified time period
+
+dat2 <- dat1[, MATCHWORD:=re2_extract_all(quanteda::char_tolower(text), customWords, parallel = TRUE)] %>%
+  filter(MATCHWORD != "character(0)")
+
+```
+
+## STEP 4: Enter variables you wish to keep and flatten the data set to write to a .csv
+
+```{r, echo=FALSE}
+
+dat2 <- dat2 %>% 
+  select(screen_name, text, created_at, hashtags, urls_url, followers_count, MATCHWORD) %>% #Choose variables to include in your data set
   flatten() #Makes file writeable using write_csv() - basically, makes sure that emojis show up and that there are minimal formatting issues
 
-write_csv(dat1, SPREADSHEET) #Creates an Excel .csv file
+write_csv(dat2, SPREADSHEET) #Creates an Excel .csv file
 
 ```
 
